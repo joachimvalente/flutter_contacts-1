@@ -13,21 +13,24 @@ import java.util.HashMap;
 public class Item{
 
     public String label, value;
+    public boolean isPrimary;
 
-    public Item(String label, String value) {
+    public Item(String label, String value, boolean isPrimary) {
         this.label = label;
         this.value = value;
+        this.isPrimary = isPrimary;
     }
 
     HashMap<String, String> toMap(){
         HashMap<String,String> result = new HashMap<>();
         result.put("label",label);
         result.put("value",value);
+        result.put("isPrimary",isPrimary ? "true" : "false");
         return result;
     }
 
     public static Item fromMap(HashMap<String,String> map){
-        return new Item(map.get("label"), map.get("value"));
+        return new Item(map.get("label"), map.get("value"), map.get("isPrimary") == "true");
     }
 
     public static String getPhoneLabel(int type){

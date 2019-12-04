@@ -3,7 +3,7 @@ package flutter.plugins.contactsservice.contactsservice;
 import java.util.ArrayList;
 import java.util.HashMap;
 
-public class Contact {
+public class Contact implements Comparable<Contact> {
 
     Contact(String id) {
         this.identifier = id;
@@ -13,7 +13,8 @@ public class Contact {
     }
 
     String identifier;
-    String displayName, givenName, middleName, familyName, prefix, suffix, company, jobTitle, note;
+    String displayName, givenName, middleName, familyName, prefix, suffix, company, jobTitle, note, birthday, androidAccountType, androidAccountName;
+    boolean androidStarred;
     ArrayList<Item> emails = new ArrayList<>();
     ArrayList<Item> phones = new ArrayList<>();
     ArrayList<PostalAddress> postalAddresses = new ArrayList<>();
@@ -32,6 +33,10 @@ public class Contact {
         contactMap.put("jobTitle", jobTitle);
         contactMap.put("avatar", avatar);
         contactMap.put("note", note);
+        contactMap.put("birthday", birthday);
+        contactMap.put("androidAccountType", androidAccountType);
+        contactMap.put("androidAccountName", androidAccountName);
+        contactMap.put("androidStarred", androidStarred);
 
         ArrayList<HashMap<String, String>> emailsMap = new ArrayList<>();
         for (Item email : emails) {
@@ -67,6 +72,10 @@ public class Contact {
         contact.jobTitle = (String) map.get("jobTitle");
         contact.avatar = (byte[]) map.get("avatar");
         contact.note = (String) map.get("note");
+        contact.birthday = (String) map.get("birthday");
+        contact.androidAccountType = (String) map.get("androidAccountType");
+        contact.androidAccountName = (String) map.get("androidAccountName");
+        contact.androidStarred = (boolean) map.get("androidStarred");
 
         ArrayList<HashMap> emails = (ArrayList<HashMap>) map.get("emails");
         if (emails != null) {
@@ -87,5 +96,13 @@ public class Contact {
             }
         }
         return contact;
+    }
+
+    @Override
+    public int compareTo(Contact contact) {
+        String givenName1 = this.givenName == null ? "" : this.givenName.toLowerCase();
+        String givenName2 = contact == null ? ""
+            : (contact.givenName == null ? "" : contact.givenName.toLowerCase());
+        return givenName1.compareTo(givenName2);
     }
 }
