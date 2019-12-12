@@ -75,7 +75,7 @@ public class Contact implements Comparable<Contact> {
         contact.birthday = (String) map.get("birthday");
         contact.androidAccountType = (String) map.get("androidAccountType");
         contact.androidAccountName = (String) map.get("androidAccountName");
-        contact.androidStarred = (boolean) map.get("androidStarred");
+        contact.androidStarred = map.get("androidStarred") != null ? (boolean) map.get("androidStarred") : false;
 
         ArrayList<HashMap> emails = (ArrayList<HashMap>) map.get("emails");
         if (emails != null) {
