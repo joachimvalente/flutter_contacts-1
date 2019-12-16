@@ -62,7 +62,7 @@ public class ContactsServicePlugin implements MethodCallHandler {
   public void onMethodCall(MethodCall call, Result result) {
     switch(call.method){
       case "getContacts": {
-        this.getContacts((String)call.argument("query"), (boolean)call.argument("withThumbnails"), (boolean)call.argument("photoHighResolution"), (boolean)call.argument("orderByGivenName"), (boolean)call.argument("queryIsRawContacId"), result);
+        this.getContacts((String)call.argument("query"), (boolean)call.argument("withThumbnails"), (boolean)call.argument("photoHighResolution"), (boolean)call.argument("orderByGivenName"), (boolean)call.argument("queryIsRawContactId"), result);
         break;
       } case "getContactsForPhone": {
         this.getContactsForPhone((String)call.argument("phone"), (boolean)call.argument("withThumbnails"), (boolean)call.argument("photoHighResolution"), (boolean)call.argument("orderByGivenName"), result);
@@ -142,8 +142,8 @@ public class ContactsServicePlugin implements MethodCallHandler {
 
 
   @TargetApi(Build.VERSION_CODES.ECLAIR)
-  private void getContacts(String query, boolean withThumbnails, boolean photoHighResolution, boolean orderByGivenName, boolean queryIsRawContacId, Result result) {
-    new GetContactsTask(result, withThumbnails, photoHighResolution, orderByGivenName).executeOnExecutor(executor, query, false, queryIsRawContacId);
+  private void getContacts(String query, boolean withThumbnails, boolean photoHighResolution, boolean orderByGivenName, boolean queryIsRawContactId, Result result) {
+    new GetContactsTask(result, withThumbnails, photoHighResolution, orderByGivenName).executeOnExecutor(executor, query, false, queryIsRawContactId);
   }
 
   private void getContactsForPhone(String phone, boolean withThumbnails, boolean photoHighResolution, boolean orderByGivenName, Result result) {
@@ -216,7 +216,7 @@ public class ContactsServicePlugin implements MethodCallHandler {
   }
 
 
-  private Cursor getCursor(String query, boolean queryIsRawContacId) {
+  private Cursor getCursor(String query, boolean queryIsRawContactId) {
     String selection = ContactsContract.Data.MIMETYPE + "=? OR " + ContactsContract.Data.MIMETYPE + "=? OR "
         + ContactsContract.Data.MIMETYPE + "=? OR " + ContactsContract.Data.MIMETYPE + "=? OR "
         + ContactsContract.Data.MIMETYPE + "=? OR " + ContactsContract.Data.MIMETYPE + "=? OR "
@@ -227,7 +227,7 @@ public class ContactsServicePlugin implements MethodCallHandler {
     };
     if(query != null){
       selectionArgs = new String[]{query + "%"};
-      if (queryIsRawContacId) {
+      if (queryIsRawContactId) {
         selection = ContactsContract.Data.RAW_CONTACT_ID + " LIKE ?";
       } else {
         selection = ContactsContract.Contacts.DISPLAY_NAME_PRIMARY + " LIKE ?";
