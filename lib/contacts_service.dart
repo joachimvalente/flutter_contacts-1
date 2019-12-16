@@ -17,13 +17,15 @@ class ContactsService {
       {String query,
       bool withThumbnails = true,
       bool photoHighResolution = true,
-      bool orderByGivenName = true}) async {
+      bool orderByGivenName = true,
+      bool queryIsRawContactId = false}) async {
     Iterable contacts =
         await _channel.invokeMethod('getContacts', <String, dynamic>{
       'query': query,
       'withThumbnails': withThumbnails,
       'photoHighResolution': photoHighResolution,
-      'orderByGivenName': orderByGivenName
+      'orderByGivenName': orderByGivenName,
+      'queryIsRawContactId': queryIsRawContactId
     });
     return contacts.map((m) => Contact.fromMap(m));
   }
