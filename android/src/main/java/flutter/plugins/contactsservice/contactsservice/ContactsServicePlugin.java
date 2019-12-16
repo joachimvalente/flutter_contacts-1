@@ -9,6 +9,7 @@ import static android.provider.ContactsContract.CommonDataKinds.StructuredPostal
 
 import android.annotation.TargetApi;
 import android.content.ContentProviderOperation;
+import android.content.ContentProviderResult;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.database.Cursor;
@@ -61,7 +62,7 @@ public class ContactsServicePlugin implements MethodCallHandler {
   public void onMethodCall(MethodCall call, Result result) {
     switch(call.method){
       case "getContacts": {
-        this.getContacts((String)call.argument("query"), (boolean)call.argument("withThumbnails"), (boolean)call.argument("photoHighResolution"), (boolean)call.argument("orderByGivenName"), result);
+        this.getContacts((String)call.argument("query"), (boolean)call.argument("withThumbnails"), (boolean)call.argument("photoHighResolution"), (boolean)call.argument("orderByGivenName"), (boolean)call.argument("queryIsRawContacId"), result);
         break;
       } case "getContactsForPhone": {
         this.getContactsForPhone((String)call.argument("phone"), (boolean)call.argument("withThumbnails"), (boolean)call.argument("photoHighResolution"), (boolean)call.argument("orderByGivenName"), result);
@@ -72,8 +73,9 @@ public class ContactsServicePlugin implements MethodCallHandler {
         break;
       } case "addContact": {
         final Contact contact = Contact.fromMap((HashMap)call.arguments);
-        if (this.addContact(contact)) {
-          result.success(null);
+        final String contactId = this.addContact(contact);
+        if (contactId != null) {
+          result.success(contactId);
         } else {
           result.error(null, "Failed to add the contact", null);
         }
@@ -140,12 +142,12 @@ public class ContactsServicePlugin implements MethodCallHandler {
 
 
   @TargetApi(Build.VERSION_CODES.ECLAIR)
-  private void getContacts(String query, boolean withThumbnails, boolean photoHighResolution, boolean orderByGivenName, Result result) {
-    new GetContactsTask(result, withThumbnails, photoHighResolution, orderByGivenName).executeOnExecutor(executor, query, false);
+  private void getContacts(String query, boolean withThumbnails, boolean photoHighResolution, boolean orderByGivenName, boolean queryIsRawContacId, Result result) {
+    new GetContactsTask(result, withThumbnails, photoHighResolution, orderByGivenName).executeOnExecutor(executor, query, false, queryIsRawContacId);
   }
 
   private void getContactsForPhone(String phone, boolean withThumbnails, boolean photoHighResolution, boolean orderByGivenName, Result result) {
-    new GetContactsTask(result, withThumbnails, photoHighResolution, orderByGivenName).executeOnExecutor(executor, phone, true);
+    new GetContactsTask(result, withThumbnails, photoHighResolution, orderByGivenName).executeOnExecutor(executor, phone, true, false);
   }
 
   @TargetApi(Build.VERSION_CODES.CUPCAKE)
@@ -169,7 +171,7 @@ public class ContactsServicePlugin implements MethodCallHandler {
       if ((Boolean) params[1])
         contacts = getContactsFrom(getCursorForPhone(((String) params[0])));
       else
-        contacts = getContactsFrom(getCursor(((String) params[0])));
+        contacts = getContactsFrom(getCursor(((String) params[0]), ((Boolean) params[2])));
 
       if (withThumbnails) {
         for(Contact c : contacts){
@@ -214,7 +216,7 @@ public class ContactsServicePlugin implements MethodCallHandler {
   }
 
 
-  private Cursor getCursor(String query) {
+  private Cursor getCursor(String query, boolean queryIsRawContacId) {
     String selection = ContactsContract.Data.MIMETYPE + "=? OR " + ContactsContract.Data.MIMETYPE + "=? OR "
         + ContactsContract.Data.MIMETYPE + "=? OR " + ContactsContract.Data.MIMETYPE + "=? OR "
         + ContactsContract.Data.MIMETYPE + "=? OR " + ContactsContract.Data.MIMETYPE + "=? OR "
@@ -225,7 +227,11 @@ public class ContactsServicePlugin implements MethodCallHandler {
     };
     if(query != null){
       selectionArgs = new String[]{query + "%"};
-      selection = ContactsContract.Contacts.DISPLAY_NAME_PRIMARY + " LIKE ?";
+      if (queryIsRawContacId) {
+        selection = ContactsContract.Data.RAW_CONTACT_ID + " LIKE ?";
+      } else {
+        selection = ContactsContract.Contacts.DISPLAY_NAME_PRIMARY + " LIKE ?";
+      }
     }
 
     return contentResolver.query(ContactsContract.Data.CONTENT_URI, PROJECTION, selection, selectionArgs, null);
@@ -399,13 +405,13 @@ public class ContactsServicePlugin implements MethodCallHandler {
     }
   }
 
-  private boolean addContact(Contact contact){
+  private String addContact(Contact contact){
 
     ArrayList<ContentProviderOperation> ops = new ArrayList<>();
 
     ContentProviderOperation.Builder op = ContentProviderOperation.newInsert(ContactsContract.RawContacts.CONTENT_URI)
-            .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, null)
-            .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, null);
+            .withValue(ContactsContract.RawContacts.ACCOUNT_TYPE, contact.androidAccountType)
+            .withValue(ContactsContract.RawContacts.ACCOUNT_NAME, contact.androidAccountName);
     ops.add(op.build());
 
     op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
@@ -482,10 +488,11 @@ public class ContactsServicePlugin implements MethodCallHandler {
     }
 
     try {
-      contentResolver.applyBatch(ContactsContract.AUTHORITY, ops);
-      return true;
+      ContentProviderResult[] addContactResults = contentResolver.applyBatch(ContactsContract.AUTHORITY, ops);
+      final long rawContactId = ContentUris.parseId(addContactResults[0].uri);
+      return String.valueOf(rawContactId);
     } catch (Exception e) {
-      return false;
+      return null;
     }
   }
 
