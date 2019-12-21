@@ -62,7 +62,7 @@ public class ContactsServicePlugin implements MethodCallHandler {
   public void onMethodCall(MethodCall call, Result result) {
     switch(call.method){
       case "getContacts": {
-        this.getContacts((String)call.argument("query"), (boolean)call.argument("withThumbnails"), (boolean)call.argument("photoHighResolution"), (boolean)call.argument("orderByGivenName"), (boolean)call.argument("queryIsRawContactId"), result);
+        this.getContacts((String)call.argument("query"), (boolean)call.argument("withThumbnails"), (boolean)call.argument("photoHighResolution"), (boolean)call.argument("orderByGivenName"), (boolean)call.argument("queryIsRawContactId"), (boolean)call.argument("queryIsContactId"), result);
         break;
       } case "getContactsForPhone": {
         this.getContactsForPhone((String)call.argument("phone"), (boolean)call.argument("withThumbnails"), (boolean)call.argument("photoHighResolution"), (boolean)call.argument("orderByGivenName"), result);
@@ -106,6 +106,7 @@ public class ContactsServicePlugin implements MethodCallHandler {
   private static final String[] PROJECTION =
           {
                   ContactsContract.Data.CONTACT_ID,
+                  ContactsContract.Data.RAW_CONTACT_ID,
                   ContactsContract.Profile.DISPLAY_NAME,
                   ContactsContract.Contacts.Data.MIMETYPE,
                   ContactsContract.RawContacts.ACCOUNT_TYPE,
@@ -142,12 +143,12 @@ public class ContactsServicePlugin implements MethodCallHandler {
 
 
   @TargetApi(Build.VERSION_CODES.ECLAIR)
-  private void getContacts(String query, boolean withThumbnails, boolean photoHighResolution, boolean orderByGivenName, boolean queryIsRawContactId, Result result) {
-    new GetContactsTask(result, withThumbnails, photoHighResolution, orderByGivenName).executeOnExecutor(executor, query, false, queryIsRawContactId);
+  private void getContacts(String query, boolean withThumbnails, boolean photoHighResolution, boolean orderByGivenName, boolean queryIsRawContactId, boolean queryIsContactId, Result result) {
+    new GetContactsTask(result, withThumbnails, photoHighResolution, orderByGivenName).executeOnExecutor(executor, query, false, queryIsRawContactId, queryIsContactId);
   }
 
   private void getContactsForPhone(String phone, boolean withThumbnails, boolean photoHighResolution, boolean orderByGivenName, Result result) {
-    new GetContactsTask(result, withThumbnails, photoHighResolution, orderByGivenName).executeOnExecutor(executor, phone, true, false);
+    new GetContactsTask(result, withThumbnails, photoHighResolution, orderByGivenName).executeOnExecutor(executor, phone, true, false, false);
   }
 
   @TargetApi(Build.VERSION_CODES.CUPCAKE)
@@ -171,7 +172,7 @@ public class ContactsServicePlugin implements MethodCallHandler {
       if ((Boolean) params[1])
         contacts = getContactsFrom(getCursorForPhone(((String) params[0])));
       else
-        contacts = getContactsFrom(getCursor(((String) params[0]), ((Boolean) params[2])));
+        contacts = getContactsFrom(getCursor(((String) params[0]), ((Boolean) params[2]), ((Boolean) params[3])));
 
       if (withThumbnails) {
         for(Contact c : contacts){
@@ -216,7 +217,7 @@ public class ContactsServicePlugin implements MethodCallHandler {
   }
 
 
-  private Cursor getCursor(String query, boolean queryIsRawContactId) {
+  private Cursor getCursor(String query, boolean queryIsRawContactId, boolean queryIsContactId) {
     String selection = ContactsContract.Data.MIMETYPE + "=? OR " + ContactsContract.Data.MIMETYPE + "=? OR "
         + ContactsContract.Data.MIMETYPE + "=? OR " + ContactsContract.Data.MIMETYPE + "=? OR "
         + ContactsContract.Data.MIMETYPE + "=? OR " + ContactsContract.Data.MIMETYPE + "=? OR "
@@ -229,6 +230,8 @@ public class ContactsServicePlugin implements MethodCallHandler {
       selectionArgs = new String[]{query + "%"};
       if (queryIsRawContactId) {
         selection = ContactsContract.Data.RAW_CONTACT_ID + " LIKE ?";
+      } else if (queryIsContactId) {
+        selection = ContactsContract.RawContacts.CONTACT_ID + " LIKE ?";
       } else {
         selection = ContactsContract.Contacts.DISPLAY_NAME_PRIMARY + " LIKE ?";
       }
@@ -283,6 +286,7 @@ public class ContactsServicePlugin implements MethodCallHandler {
       contact.androidAccountType = cursor.getString(cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_TYPE));
       contact.androidAccountName = cursor.getString(cursor.getColumnIndex(ContactsContract.RawContacts.ACCOUNT_NAME));
       contact.androidStarred = cursor.getInt(cursor.getColumnIndex(ContactsContract.RawContacts.STARRED)) == 1;
+      contact.rawContactId = cursor.getString(cursor.getColumnIndex(ContactsContract.Data.RAW_CONTACT_ID));
 
       //NAMES
       if (mimeType.equals(CommonDataKinds.StructuredName.CONTENT_ITEM_TYPE)) {
@@ -560,7 +564,7 @@ public class ContactsServicePlugin implements MethodCallHandler {
     // Insert data back into contact
     op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
             .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Organization.CONTENT_ITEM_TYPE)
-            .withValue(ContactsContract.Data.RAW_CONTACT_ID, contact.identifier)
+            .withValue(ContactsContract.Data.RAW_CONTACT_ID, contact.rawContactId)
             .withValue(Organization.TYPE, Organization.TYPE_WORK)
             .withValue(Organization.COMPANY, contact.company)
             .withValue(Organization.TITLE, contact.jobTitle);
@@ -568,47 +572,53 @@ public class ContactsServicePlugin implements MethodCallHandler {
 
     op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
             .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Note.CONTENT_ITEM_TYPE)
-            .withValue(ContactsContract.Data.RAW_CONTACT_ID, contact.identifier)
+            .withValue(ContactsContract.Data.RAW_CONTACT_ID, contact.rawContactId)
             .withValue(CommonDataKinds.Note.NOTE, contact.note);
     ops.add(op.build());
 
     //Photo
     op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-          .withValue(ContactsContract.Data.RAW_CONTACT_ID, contact.identifier)
+          .withValue(ContactsContract.Data.RAW_CONTACT_ID, contact.rawContactId)
           .withValue(ContactsContract.Data.IS_SUPER_PRIMARY, 1)
           .withValue(ContactsContract.CommonDataKinds.Photo.PHOTO, contact.avatar)
           .withValue(ContactsContract.Data.MIMETYPE, ContactsContract.CommonDataKinds.Photo.CONTENT_ITEM_TYPE);
     ops.add(op.build());
 
-
     for (Item phone : contact.phones) {
       op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-              .withValue(ContactsContract.Data.MIMETYPE, CommonDataKinds.Phone.CONTENT_ITEM_TYPE)
-              .withValue(ContactsContract.Data.RAW_CONTACT_ID, contact.identifier)
+              .withValue(ContactsContract.Data.MIMETYPE, Phone.CONTENT_ITEM_TYPE)
+              .withValue(ContactsContract.Data.RAW_CONTACT_ID, contact.rawContactId)
               .withValue(Phone.NUMBER, phone.value);
 
       if (Item.stringToPhoneType(phone.label) == ContactsContract.CommonDataKinds.Phone.TYPE_CUSTOM){
-        op.withValue( ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.BaseTypes.TYPE_CUSTOM );
-        op.withValue(ContactsContract.CommonDataKinds.Phone.LABEL, phone.label);
-      } else
-        op.withValue( ContactsContract.CommonDataKinds.Phone.TYPE, Item.stringToPhoneType(phone.label) );
+        op = op.withValue( ContactsContract.CommonDataKinds.Phone.TYPE, ContactsContract.CommonDataKinds.BaseTypes.TYPE_CUSTOM );
+        op = op.withValue(ContactsContract.CommonDataKinds.Phone.LABEL, phone.label);
+      } else {
+        op = op.withValue(ContactsContract.CommonDataKinds.Phone.TYPE, Item.stringToPhoneType(phone.label));
+      }
+      if (phone.isPrimary) {
+        op = op.withValue(ContactsContract.Data.IS_PRIMARY, 1);
+      }
 
       ops.add(op.build());
     }
 
     for (Item email : contact.emails) {
       op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
-              .withValue(ContactsContract.Data.MIMETYPE, CommonDataKinds.Email.CONTENT_ITEM_TYPE)
-              .withValue(ContactsContract.Data.RAW_CONTACT_ID, contact.identifier)
+              .withValue(ContactsContract.Data.MIMETYPE, Email.CONTENT_ITEM_TYPE)
+              .withValue(ContactsContract.Data.RAW_CONTACT_ID, contact.rawContactId)
               .withValue(CommonDataKinds.Email.ADDRESS, email.value)
               .withValue(CommonDataKinds.Email.TYPE, Item.stringToEmailType(email.label));
+      if (email.isPrimary) {
+        op = op.withValue(ContactsContract.Data.IS_PRIMARY, 1);
+      }
       ops.add(op.build());
     }
 
     for (PostalAddress address : contact.postalAddresses) {
       op = ContentProviderOperation.newInsert(ContactsContract.Data.CONTENT_URI)
               .withValue(ContactsContract.Data.MIMETYPE, CommonDataKinds.StructuredPostal.CONTENT_ITEM_TYPE)
-              .withValue(ContactsContract.Data.RAW_CONTACT_ID, contact.identifier)
+              .withValue(ContactsContract.Data.RAW_CONTACT_ID, contact.rawContactId)
               .withValue(CommonDataKinds.StructuredPostal.TYPE, PostalAddress.stringToPostalAddressType(address.label))
               .withValue(CommonDataKinds.StructuredPostal.STREET, address.street)
               .withValue(CommonDataKinds.StructuredPostal.CITY, address.city)
