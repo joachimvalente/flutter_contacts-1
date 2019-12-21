@@ -18,14 +18,16 @@ class ContactsService {
       bool withThumbnails = true,
       bool photoHighResolution = true,
       bool orderByGivenName = true,
-      bool queryIsRawContactId = false}) async {
+      bool queryIsRawContactId = false,
+      bool queryIsContactId = false}) async {
     Iterable contacts =
         await _channel.invokeMethod('getContacts', <String, dynamic>{
       'query': query,
       'withThumbnails': withThumbnails,
       'photoHighResolution': photoHighResolution,
       'orderByGivenName': orderByGivenName,
-      'queryIsRawContactId': queryIsRawContactId
+      'queryIsRawContactId': queryIsRawContactId,
+      'queryIsContactId': queryIsContactId
     });
     return contacts.map((m) => Contact.fromMap(m));
   }
@@ -90,10 +92,11 @@ class Contact {
     this.androidAccountTypeRaw,
     this.androidAccountName,
     this.androidStarred,
+    this.rawContactId,
   });
 
   String identifier, displayName, givenName, middleName, prefix, suffix, familyName, company, jobTitle;
-  String androidAccountTypeRaw, androidAccountName;
+  String androidAccountTypeRaw, androidAccountName, rawContactId;
   AndroidAccountType androidAccountType;
   bool androidStarred;
   Iterable<Item> emails = [];
@@ -122,6 +125,7 @@ class Contact {
     androidAccountType = accountTypeFromString(androidAccountTypeRaw);
     androidAccountName = m["androidAccountName"];
     androidStarred = m["androidStarred"].toString().toLowerCase() == "true";
+    rawContactId = m["rawContactId"];
     emails = (m["emails"] as Iterable)?.map((m) => Item.fromMap(m));
     phones = (m["phones"] as Iterable)?.map((m) => Item.fromMap(m));
     postalAddresses = (m["postalAddresses"] as Iterable)
@@ -165,6 +169,7 @@ class Contact {
       "androidAccountType": contact.androidAccountTypeRaw, 
       "androidAccountName": contact.androidAccountName,
       "androidStarred": contact.androidStarred,
+      "rawContactId": contact.rawContactId,
       "emails": emails,
       "phones": phones,
       "postalAddresses": postalAddresses,
@@ -188,6 +193,7 @@ class Contact {
       jobTitle: this.jobTitle ?? other.jobTitle,
       androidAccountType: this.androidAccountType ?? other.androidAccountType,
       androidAccountName: this.androidAccountName ?? other.androidAccountName,
+      rawContactId: this.rawContactId ?? other.rawContactId,
       androidStarred: this.androidStarred ?? other.androidStarred,
       emails: this.emails == null
           ? other.emails
@@ -220,6 +226,7 @@ class Contact {
         this.androidAccountType == other.androidAccountType &&
         this.androidAccountName == other.androidAccountName &&
         this.androidStarred == other.androidStarred &&
+        this.rawContactId == other.rawContactId &&
         this.middleName == other.middleName &&
         this.prefix == other.prefix &&
         this.suffix == other.suffix &&
@@ -242,6 +249,7 @@ class Contact {
       this.androidAccountType,
       this.androidAccountName,
       this.androidStarred,
+      this.rawContactId,
       this.middleName,
       this.prefix,
       this.suffix,
@@ -358,7 +366,7 @@ class PostalAddress {
 /// Item class used for contact fields which only have a [label] and
 /// a [value], such as emails and phone numbers
 class Item {
-  Item({this.label, this.value});
+  Item({this.label, this.value, this.isPrimary});
 
   String label, value;
   bool isPrimary;
